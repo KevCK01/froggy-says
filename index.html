@@ -1017,6 +1017,9 @@
         
         // Create a silent audio element for iOS priming
         const silentAudio = new Audio("data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAAGn9AAAIAAANIAAAARMQJEMBAMDAoPB4PP/BwfT/Lh4AAAABg8HwfB/5c/KAgGDw+D4P//lwEBgYPB4PB4PwfB//5cAAAAD5d////+XAQCAYPDw+DweBwf///l/8uAgMDA4MHh8Hg//5cPw//8vn////y4efPPPPPPPPPPPPPPPPPPPPPPPPPP/7UMQEgAjMOXf09oAhEgcwPpyQBPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP/7UMQWgAAADSAAAAAAAANIAAAATPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP");
+        silentAudio.setAttribute('playsinline', '');
+        silentAudio.setAttribute('webkit-playsinline', '');
+        silentAudio.volume = 0.5; // Not too quiet - iOS might ignore very quiet audio
         silentAudio.volume = 0.01;
         
         function initAudio() {
@@ -1306,32 +1309,51 @@
         const soundOverlay = document.getElementById('sound-overlay');
         const soundButton = soundOverlay.querySelector('.sound-button');
         
-        soundButton.addEventListener('touchstart', enableSoundAndStart, { passive: false });
+        // Use touchend on iOS - it's more reliable than touchstart for audio
+        soundButton.addEventListener('touchend', enableSoundAndStart, { passive: false });
         soundButton.addEventListener('click', enableSoundAndStart);
-        
-        // Also allow tapping anywhere on the overlay
-        soundOverlay.addEventListener('touchstart', enableSoundAndStart, { passive: false });
+        soundOverlay.addEventListener('touchend', enableSoundAndStart, { passive: false });
         soundOverlay.addEventListener('click', enableSoundAndStart);
         
+        let soundEnableAttempted = false;
+        
         function enableSoundAndStart(e) {
+            // Prevent double-firing from touch + click
+            if (soundEnableAttempted) return;
+            soundEnableAttempted = true;
+            
             e.preventDefault();
             e.stopPropagation();
             
-            console.log('Enable sound button pressed!');
+            console.log('Enable sound button pressed! Event:', e.type);
             
-            // Initialize and unlock audio RIGHT HERE in the touch handler
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                console.log('AudioContext created in touch handler');
+            // iOS SPECIFIC: Create AudioContext fresh in the gesture handler
+            if (audioContext) {
+                audioContext.close(); // Close any existing context
             }
             
-            // Resume immediately
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-                console.log('AudioContext resumed');
+            // Create new context - MUST happen in touch/click handler for iOS
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('Fresh AudioContext created, state:', audioContext.state);
+            
+            // iOS: Resume is required even on new context sometimes
+            const resumePromise = audioContext.resume();
+            console.log('Resume called');
+            
+            // iOS TRICK: Create and play a buffer source (more reliable than oscillator on iOS)
+            try {
+                // Create a tiny audio buffer (1 sample of silence)
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(0);
+                console.log('Buffer source played');
+            } catch (err) {
+                console.error('Buffer play failed:', err);
             }
             
-            // Play actual sound to fully unlock (not silent!)
+            // ALSO try oscillator as backup
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -1339,23 +1361,35 @@
                 gainNode.connect(audioContext.destination);
                 oscillator.type = 'sine';
                 oscillator.frequency.value = 440;
-                gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.1);
-                console.log('Unlock sound played!');
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                oscillator.start(0);
+                oscillator.stop(audioContext.currentTime + 0.15);
+                console.log('Oscillator started');
                 audioUnlocked = true;
             } catch (err) {
-                console.error('Error playing unlock sound:', err);
+                console.error('Oscillator failed:', err);
             }
             
-            // Hide the overlay
+            // ALSO try HTML5 Audio as another backup
+            try {
+                silentAudio.play();
+                console.log('HTML5 Audio played');
+            } catch (err) {
+                console.log('HTML5 Audio failed:', err);
+            }
+            
+            // Hide overlay
             soundOverlay.classList.add('hidden');
             
-            // Play fanfare after a tiny delay
-            setTimeout(() => {
-                playFanfare();
-            }, 150);
+            // Wait for resume to complete, then play fanfare
+            Promise.resolve(resumePromise).then(() => {
+                console.log('AudioContext state after resume:', audioContext.state);
+                setTimeout(() => {
+                    console.log('Playing fanfare, state:', audioContext.state);
+                    playFanfare();
+                }, 100);
+            });
         }
 
         // Start the game with selected number of rounds
