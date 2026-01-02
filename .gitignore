@@ -1,0 +1,11 @@
+# Backup files
+froggy-says copy*.html
+
+# macOS files
+.DS_Store
+
+# Unused lily pad variations
+lillypad02.png
+lillypad03.png
+lillypad04.png
+

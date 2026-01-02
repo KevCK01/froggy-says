@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#2E8B57">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Froggy Says! A game for Theo!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+        }
+        
+        /* Prevent text selection and improve touch handling */
+        button, .lily-pad-wrapper, .lily-pad {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: manipulation; /* Faster tap response */
+            -webkit-user-drag: none; /* Prevent dragging on Safari */
+        }
+        
+        /* Prevent image dragging */
+        img {
+            -webkit-user-drag: none;
+            -khtml-user-drag: none;
+            -moz-user-drag: none;
+            -o-user-drag: none;
+            user-drag: none;
+            pointer-events: none; /* Let clicks pass through to parent wrapper */
+        }
+        
+        /* But allow pointer events on the wrapper */
+        .lily-pad-wrapper {
+            pointer-events: auto;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Arial Rounded MT Bold', cursive, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            background: #87CEEB;
+            /* Mobile optimizations */
+            overscroll-behavior: none; /* Prevent pull-to-refresh and overscroll */
+            -webkit-overflow-scrolling: touch;
+            position: fixed; /* Prevent iOS bounce scroll */
+            top: 0;
+            left: 0;
+        }
+
+        /* Background container */
+        #game-container {
+            width: 100%;
+            height: 100%;
+            background-image: url('background.png');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 20% black overlay on background */
+        #game-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            pointer-events: none; /* Allow clicks to pass through */
+            z-index: 1;
+        }
+
+        /* Ensure game elements are above the overlay */
+        #game-container > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Setup screen styles */
+        /* Setup popup overlay */
+        #setup-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4); /* Semi-transparent dark overlay */
+            z-index: 100;
+            backdrop-filter: blur(5px); /* Blur the game behind */
+        }
+
+        #setup-screen.hidden {
+            display: none;
+        }
+
+        #setup-screen h1 {
+            font-size: 4rem;
+            color: #FFD700;
+            text-shadow: 3px 3px 10px rgba(0,0,0,0.8), 0 0 20px rgba(255, 215, 0, 0.5);
+            margin-bottom: 3rem;
+            text-align: center;
+            padding: 0 20px;
+            background: rgba(46, 139, 87, 0.8);
+            padding: 30px 50px;
+            border-radius: 30px;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .round-button {
+            font-size: 2rem;
+            padding: 30px 50px;
+            background: #FFD700;
+            border: 5px solid #FFA500;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #2E8B57;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+        }
+
+        .round-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 20px rgba(0,0,0,0.4);
+        }
+
+        .round-button:active {
+            transform: scale(0.95);
+        }
+
+        /* Special styling for Infinity Mode button */
+        .infinity-button {
+            background: linear-gradient(135deg, #FF4500 0%, #FF6B00 50%, #FFD700 100%);
+            border-color: #FF0000;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            animation: infinityPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes infinityPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 8px 15px rgba(255, 69, 0, 0.5); }
+            50% { transform: scale(1.05); box-shadow: 0 12px 25px rgba(255, 69, 0, 0.8); }
+        }
+
+        .infinity-button:hover {
+            animation: none;
+            transform: scale(1.15);
+            box-shadow: 0 15px 30px rgba(255, 69, 0, 0.9);
+        }
+
+        /* Game screen styles */
+        #game-screen {
+            display: flex; /* Always visible now */
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #round-display {
+            font-size: 2.5rem;
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+            background: rgba(46, 139, 87, 0.7);
+            padding: 15px 40px;
+            border-radius: 20px;
+            font-weight: bold;
+            opacity: 0; /* Hidden until game starts */
+            transition: opacity 0.3s ease;
+        }
+
+        #round-display.visible {
+            opacity: 1;
+        }
+
+        /* Back to Home button */
+        #back-home-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1rem;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            backdrop-filter: blur(5px);
+            z-index: 50;
+            opacity: 0; /* Hidden until game starts */
+        }
+
+        #back-home-button.visible {
+            opacity: 1;
+        }
+
+        #back-home-button:hover {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: scale(1.05);
+        }
+
+        #back-home-button:active {
+            transform: scale(0.95);
+        }
+
+        #frog-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1.5);
+            transition: transform 0.3s ease;
+            --frog-scale: 1.5; /* Initial frog scale for animation */
+            z-index: 5; /* Below lily pads and hint button */
+        }
+
+        #frog {
+            display: block;
+            max-width: 300px;
+            height: auto;
+        }
+
+        #lily-pad-container {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+            opacity: 0; /* Hidden until game starts */
+            transition: opacity 0.3s ease;
+            position: relative;
+            z-index: 10; /* Above the frog */
+        }
+
+        #lily-pad-container.visible {
+            opacity: 1;
+        }
+
+        /* Hint button for infinity mode */
+        #hint-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%);
+            border: 4px solid #7D3C98;
+            font-size: 2.5rem;
+            cursor: pointer;
+            display: none; /* Hidden by default, shown only in infinity mode */
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            align-self: center;
+            position: relative;
+            z-index: 20; /* Above the frog which has no z-index set */
+        }
+
+        #hint-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(155, 89, 182, 0.6);
+        }
+
+        #hint-button:active {
+            transform: scale(0.95);
+        }
+
+        #hint-button.visible {
+            display: flex;
+        }
+
+        /* Hint glow effect on lily pad - uses box-shadow to preserve color filters */
+        .lily-pad.hint {
+            animation: hintPulse 0.8s ease-in-out infinite;
+        }
+
+        .lily-pad.hint.red {
+            filter: brightness(1.4) sepia(1) saturate(5) hue-rotate(-50deg);
+        }
+        .lily-pad.hint.green {
+            filter: brightness(1.5) sepia(0.5) saturate(3) hue-rotate(60deg);
+        }
+        .lily-pad.hint.blue {
+            filter: brightness(1.4) sepia(1) saturate(4) hue-rotate(180deg);
+        }
+        .lily-pad.hint.yellow {
+            filter: brightness(1.6) sepia(1) saturate(5) hue-rotate(10deg);
+        }
+
+        @keyframes hintPulse {
+            0%, 100% { 
+                box-shadow: 0 0 20px 10px rgba(255, 255, 255, 0.6),
+                            0 0 40px 20px rgba(255, 255, 255, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 30px 15px rgba(255, 255, 255, 0.9),
+                            0 0 60px 30px rgba(255, 255, 255, 0.5);
+            }
+        }
+
+        /* Wrapper for lily pads with dark circle background */
+        .lily-pad-wrapper {
+            width: 160px;
+            height: 160px;
+            position: relative;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        /* Dark circular background behind lily pads */
+        .lily-pad-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            z-index: 0;
+        }
+
+        .lily-pad {
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            transition: filter 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+            border-radius: 50%;
+            user-select: none;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 
+                        0 4px 10px rgba(0, 0, 0, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Color tints using CSS filters */
+        .lily-pad.red {
+            filter: brightness(0.8) sepia(1) saturate(5) hue-rotate(-50deg);
+        }
+
+        .lily-pad.green {
+            filter: brightness(0.9) sepia(0.5) saturate(3) hue-rotate(60deg);
+        }
+
+        .lily-pad.blue {
+            filter: brightness(0.8) sepia(1) saturate(4) hue-rotate(180deg);
+        }
+
+        .lily-pad.yellow {
+            filter: brightness(1.1) sepia(1) saturate(5) hue-rotate(10deg);
+        }
+
+        /* Light up effect - add brightness and enhanced glow */
+        .lily-pad.lit.red {
+            filter: brightness(1.6) sepia(1) saturate(5) hue-rotate(-50deg);
+            box-shadow: 0 8px 25px rgba(255, 50, 50, 0.6), 
+                        0 4px 15px rgba(0, 0, 0, 0.4),
+                        0 0 30px rgba(255, 50, 50, 0.4);
+        }
+
+        .lily-pad.lit.green {
+            filter: brightness(1.8) sepia(0.5) saturate(3) hue-rotate(60deg);
+            box-shadow: 0 8px 25px rgba(50, 255, 50, 0.6), 
+                        0 4px 15px rgba(0, 0, 0, 0.4),
+                        0 0 30px rgba(50, 255, 50, 0.4);
+        }
+
+        .lily-pad.lit.blue {
+            filter: brightness(1.6) sepia(1) saturate(4) hue-rotate(180deg);
+            box-shadow: 0 8px 25px rgba(50, 100, 255, 0.6), 
+                        0 4px 15px rgba(0, 0, 0, 0.4),
+                        0 0 30px rgba(50, 100, 255, 0.4);
+        }
+
+        .lily-pad.lit.yellow {
+            filter: brightness(2) sepia(1) saturate(5) hue-rotate(10deg);
+            box-shadow: 0 8px 25px rgba(255, 255, 50, 0.6), 
+                        0 4px 15px rgba(0, 0, 0, 0.4),
+                        0 0 30px rgba(255, 255, 50, 0.4);
+        }
+
+        /* Shake animation for wrong answer */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+
+        .lily-pad.shake {
+            animation: shake 0.5s;
+        }
+
+        /* Message overlay */
+        #message-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            color: white;
+            text-shadow: 4px 4px 8px rgba(0,0,0,0.7);
+            background: rgba(255, 69, 0, 0.8);
+            padding: 30px 60px;
+            border-radius: 30px;
+            display: none;
+            z-index: 50;
+            font-weight: bold;
+        }
+
+        /* GO button overlay */
+        #go-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5rem;
+            padding: 40px 80px;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #2E8B57;
+            border: 8px solid #228B22;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: bold;
+            display: none;
+            z-index: 60;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+            transition: transform 0.2s;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        #go-button:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        #go-button:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        /* Win screen */
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+        }
+
+        #win-screen h1 {
+            font-size: 5rem;
+            color: #FFD700;
+            text-shadow: 4px 4px 8px rgba(0,0,0,0.5), 0 0 30px rgba(255, 215, 0, 0.5);
+            margin-bottom: 2rem;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Frog growth pulsate animation */
+        @keyframes frogGrowPulsate {
+            0% { transform: translate(-50%, -50%) scale(var(--frog-scale)); }
+            25% { transform: translate(-50%, -50%) scale(calc(var(--frog-scale) * 1.15)); }
+            50% { transform: translate(-50%, -50%) scale(calc(var(--frog-scale) * 0.95)); }
+            75% { transform: translate(-50%, -50%) scale(calc(var(--frog-scale) * 1.08)); }
+            100% { transform: translate(-50%, -50%) scale(var(--frog-scale)); }
+        }
+
+        #frog-container.growing {
+            animation: frogGrowPulsate 0.6s ease-in-out;
+        }
+
+        #play-again-button {
+            font-size: 2.5rem;
+            padding: 30px 60px;
+            background: #2E8B57;
+            color: white;
+            border: 5px solid #228B22;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+        }
+
+        #play-again-button:hover {
+            transform: scale(1.1);
+        }
+
+        #play-again-button:active {
+            transform: scale(0.95);
+        }
+
+        /* Confetti */
+        .confetti {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            top: -20px;
+            animation: fall linear forwards;
+            z-index: 99;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(110vh) rotate(360deg);
+            }
+        }
+
+        /* Responsive adjustments */
+        /* Tablet styles */
+        @media (max-width: 768px) {
+            #setup-screen h1 {
+                font-size: 2rem;
+                padding: 20px 30px;
+            }
+            .round-button {
+                font-size: 1.5rem;
+                padding: 20px 30px;
+            }
+            #round-display {
+                font-size: 1.8rem;
+            }
+            .lily-pad-wrapper {
+                width: 110px;
+                height: 110px;
+            }
+            .lily-pad {
+                width: 100%;
+                height: 100%;
+            }
+            #back-home-button {
+                font-size: 0.85rem;
+                padding: 8px 15px;
+                top: 10px;
+                right: 10px;
+            }
+            #hint-button {
+                width: 60px;
+                height: 60px;
+                font-size: 1.8rem;
+            }
+            #go-button {
+                font-size: 3.5rem;
+                padding: 30px 60px;
+            }
+            #lily-pad-container {
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+            #frog {
+                max-width: 200px;
+            }
+        }
+
+        /* Phone styles */
+        @media (max-width: 480px) {
+            #setup-screen h1 {
+                font-size: 1.5rem;
+                padding: 15px 20px;
+                margin-bottom: 1.5rem;
+            }
+            .button-container {
+                gap: 10px;
+                padding: 0 10px;
+            }
+            .round-button {
+                font-size: 1.1rem;
+                padding: 15px 20px;
+            }
+            .infinity-button {
+                font-size: 1rem;
+                padding: 12px 15px;
+            }
+            #round-display {
+                font-size: 1.3rem;
+                padding: 10px 20px;
+            }
+            .lily-pad-wrapper {
+                width: 70px;
+                height: 70px;
+            }
+            #lily-pad-container {
+                gap: 8px;
+                margin-bottom: 15px;
+            }
+            #hint-button {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+                border-width: 3px;
+            }
+            #back-home-button {
+                font-size: 0.75rem;
+                padding: 6px 12px;
+                top: 8px;
+                right: 8px;
+            }
+            #go-button {
+                font-size: 2.5rem;
+                padding: 25px 50px;
+                border-width: 5px;
+                border-radius: 30px;
+            }
+            #message-overlay {
+                font-size: 2.5rem;
+                padding: 20px 40px;
+            }
+            #win-screen h1 {
+                font-size: 3rem;
+            }
+            #play-again-button {
+                font-size: 1.8rem;
+                padding: 20px 40px;
+            }
+            #frog {
+                max-width: 150px;
+            }
+        }
+
+        /* Extra small phones */
+        @media (max-width: 360px) {
+            .lily-pad-wrapper {
+                width: 60px;
+                height: 60px;
+            }
+            #hint-button {
+                width: 45px;
+                height: 45px;
+                font-size: 1.3rem;
+            }
+            #lily-pad-container {
+                gap: 5px;
+            }
+            #go-button {
+                font-size: 2rem;
+                padding: 20px 40px;
+            }
+            #setup-screen h1 {
+                font-size: 1.2rem;
+            }
+            .round-button {
+                font-size: 1rem;
+                padding: 12px 18px;
+            }
+        }
+
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            /* Remove hover effects that don't work well on touch */
+            .round-button:hover,
+            #hint-button:hover,
+            #back-home-button:hover,
+            #go-button:hover,
+            #play-again-button:hover {
+                transform: none;
+            }
+            
+            /* Add active states for touch feedback */
+            .round-button:active,
+            #hint-button:active,
+            #back-home-button:active,
+            #play-again-button:active {
+                transform: scale(0.95);
+            }
+            
+            #go-button:active {
+                transform: translate(-50%, -50%) scale(0.95);
+            }
+            
+            /* Ensure touch targets are large enough */
+            .lily-pad-wrapper {
+                min-width: 60px;
+                min-height: 60px;
+            }
+            
+            #hint-button {
+                min-width: 45px;
+                min-height: 45px;
+            }
+        }
+
+        /* Landscape phone orientation */
+        @media (max-height: 500px) and (orientation: landscape) {
+            #game-screen {
+                padding: 10px;
+            }
+            #round-display {
+                font-size: 1.2rem;
+                padding: 8px 20px;
+            }
+            .lily-pad-wrapper {
+                width: 80px;
+                height: 80px;
+            }
+            #lily-pad-container {
+                margin-bottom: 10px;
+            }
+            #frog {
+                max-width: 120px;
+            }
+            #frog-container {
+                top: 45%;
+            }
+            #hint-button {
+                width: 50px;
+                height: 50px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Setup Screen -->
+        <div id="setup-screen">
+            <h1>Froggy Says!<br>A game for Theo!</h1>
+            <div class="button-container">
+                <button class="round-button" id="btn-4">4 Rounds</button>
+                <button class="round-button" id="btn-6">6 Rounds</button>
+                <button class="round-button" id="btn-8">8 Rounds</button>
+                <button class="round-button" id="btn-10">10 Rounds</button>
+                <button class="round-button infinity-button" id="btn-infinity">🔥 Crazy Infinity Mode! 🔥</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen">
+            <div id="round-display">Round 1 of 4</div>
+            
+            <button id="back-home-button">← Back to Home</button>
+            
+            <div id="frog-container">
+                <img id="frog" src="frogstatic.png" alt="Frog">
+            </div>
+
+            <div id="lily-pad-container">
+                <div class="lily-pad-wrapper" data-pad="0">
+                    <img class="lily-pad red" src="lillypad01.png" alt="Red Lily Pad" draggable="false">
+                </div>
+                <div class="lily-pad-wrapper" data-pad="1">
+                    <img class="lily-pad green" src="lillypad01.png" alt="Green Lily Pad" draggable="false">
+                </div>
+                <div class="lily-pad-wrapper" data-pad="2">
+                    <img class="lily-pad blue" src="lillypad01.png" alt="Blue Lily Pad" draggable="false">
+                </div>
+                <div class="lily-pad-wrapper" data-pad="3">
+                    <img class="lily-pad yellow" src="lillypad01.png" alt="Yellow Lily Pad" draggable="false">
+                </div>
+                <button id="hint-button">💡</button>
+            </div>
+        </div>
+
+        <!-- Message Overlay -->
+        <div id="message-overlay">Try again!</div>
+
+        <!-- GO Button -->
+        <button id="go-button">GO!</button>
+
+        <!-- Win Screen -->
+        <div id="win-screen">
+            <h1>🎉 You Win! 🎉</h1>
+            <button id="play-again-button">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // GAME STATE VARIABLES
+        // ============================================
+        let totalRounds = 4;
+        let currentRound = 1;
+        let pattern = [];
+        let playerPattern = [];
+        let isPlayingPattern = false;
+        let isPlayerTurn = false;
+        let isPlayingAnimation = false; // Prevent double animation
+        let frogScale = 1.5; // Track frog size - starts 50% bigger!
+        let animationFrames = []; // Store preloaded animation frames
+        let audioContext;
+        let isInfinityMode = false; // Crazy Infinity Mode flag
+        let gameSpeed = 1.0; // Speed multiplier for infinity mode
+        
+        // Track active timers/intervals for cleanup
+        let activeTimers = [];
+        let activeIntervals = [];
+        let gameActive = false; // Flag to stop async operations
+
+        // Debug: Log when page loads
+        console.log('Game loaded! Setup screen should be visible.');
+        
+        // Ensure setup screen is visible and buttons work on load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded');
+            const setupScreen = document.getElementById('setup-screen');
+            if (setupScreen) {
+                console.log('Setup screen found, display:', window.getComputedStyle(setupScreen).display);
+            } else {
+                console.error('Setup screen not found!');
+            }
+
+            // Add event listeners to round buttons
+            document.getElementById('btn-4').addEventListener('click', () => {
+                console.log('4 rounds clicked');
+                startGame(4);
+            });
+            document.getElementById('btn-6').addEventListener('click', () => {
+                console.log('6 rounds clicked');
+                startGame(6);
+            });
+            document.getElementById('btn-8').addEventListener('click', () => {
+                console.log('8 rounds clicked');
+                startGame(8);
+            });
+            document.getElementById('btn-10').addEventListener('click', () => {
+                console.log('10 rounds clicked');
+                startGame(10);
+            });
+
+            // Add event listener for Infinity Mode button
+            document.getElementById('btn-infinity').addEventListener('click', () => {
+                console.log('Infinity Mode clicked');
+                startInfinityMode();
+            });
+
+            // Add event listener to GO button
+            document.getElementById('go-button').addEventListener('click', () => {
+                console.log('GO button clicked');
+                handleGoButton();
+            });
+
+            // Add event listener to Play Again button
+            document.getElementById('play-again-button').addEventListener('click', () => {
+                console.log('Play Again clicked');
+                resetGame();
+            });
+
+            // Add event listener to Back to Home button
+            document.getElementById('back-home-button').addEventListener('click', () => {
+                console.log('Back to Home clicked');
+                returnToHome();
+            });
+
+            // Add event listener for ESC key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    console.log('ESC key pressed');
+                    // Only allow ESC if game is in progress (not on setup screen or win screen)
+                    const setupScreen = document.getElementById('setup-screen');
+                    const winScreen = document.getElementById('win-screen');
+                    const isSetupVisible = !setupScreen.classList.contains('hidden');
+                    const isWinVisible = winScreen.style.display === 'flex';
+                    
+                    if (!isSetupVisible && !isWinVisible) {
+                        returnToHome();
+                    }
+                }
+            });
+
+            // Add event listeners to lily pads (on the wrapper for click handling)
+            // Using pointerdown for immediate response - no drag issues
+            document.querySelectorAll('.lily-pad-wrapper').forEach(wrapper => {
+                wrapper.addEventListener('pointerdown', (e) => {
+                    e.preventDefault(); // Prevent any default drag behavior
+                    if (!isPlayerTurn || isPlayingPattern || isPlayingAnimation) return;
+                    
+                    const padIndex = parseInt(wrapper.dataset.pad);
+                    handlePlayerInput(padIndex);
+                });
+            });
+
+            // Add event listener to hint button
+            // Using pointerdown for immediate response
+            document.getElementById('hint-button').addEventListener('pointerdown', (e) => {
+                e.preventDefault(); // Prevent any default behavior
+                e.stopPropagation(); // Prevent event from bubbling
+                console.log('Hint button clicked');
+                showHint();
+            });
+
+            console.log('All event listeners attached!');
+        });
+        
+        // ============================================
+        // AUDIO SETUP
+        // ============================================
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        // Play a musical note for lily pad
+        function playNote(frequency, duration = 0.3) {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'triangle'; // Pleasant sound
+            oscillator.frequency.value = frequency;
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // Note frequencies for each lily pad
+        const notes = {
+            0: 261.63, // C4
+            1: 329.63, // E4
+            2: 392.00, // G4
+            3: 493.88  // B4
+        };
+
+        // Play ribbit sound
+        function playRibbit() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        // Play buzzer sound for wrong answer
+        function playBuzzer() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.value = 80; // Low frequency
+            
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime); // Half volume
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+
+        // Play celebration sound
+        function playCelebration() {
+            if (!audioContext) initAudio();
+            
+            const frequencies = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+            
+            frequencies.forEach((freq, index) => {
+                setTimeout(() => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = freq;
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                }, index * 150);
+            });
+        }
+
+        // Play ping sound for GO button
+        function playPing() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 800; // High frequency ping
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+
+        // Play fanfare for homepage
+        function playFanfare() {
+            if (!audioContext) initAudio();
+            
+            // Cheerful ascending fanfare notes (C major arpeggio + octave)
+            const notes = [
+                { freq: 523.25, time: 0, duration: 0.15 },      // C5
+                { freq: 659.25, time: 0.12, duration: 0.15 },   // E5
+                { freq: 783.99, time: 0.24, duration: 0.15 },   // G5
+                { freq: 1046.50, time: 0.36, duration: 0.4 }    // C6 (held longer)
+            ];
+            
+            notes.forEach(note => {
+                setTimeout(() => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = note.freq;
+                    
+                    gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + note.duration);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + note.duration);
+                }, note.time * 1000);
+            });
+        }
+
+        // Play growth sound when frog gets bigger
+        function playGrowSound() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            // Frequency rises as the frog grows
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.4);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+
+
+        // ============================================
+        // GAME INITIALIZATION
+        // ============================================
+        
+        // Preload all animation frames (only once)
+        function preloadAnimationFrames() {
+            return new Promise((resolve) => {
+                // If frames are already loaded, resolve immediately
+                if (animationFrames.length === 120) {
+                    console.log('Animation frames already loaded, skipping preload');
+                    resolve();
+                    return;
+                }
+                
+                // Clear any partial loads
+                animationFrames = [];
+                
+                let loadedCount = 0;
+                const totalFrames = 120;
+                
+                for (let i = 1; i <= totalFrames; i++) {
+                    const img = new Image();
+                    const frameNumber = String(i).padStart(3, '0');
+                    img.src = `frog01${frameNumber}.png`;
+                    
+                    img.onload = () => {
+                        loadedCount++;
+                        if (loadedCount === totalFrames) {
+                            console.log('Animation frames loaded:', animationFrames.length);
+                            resolve();
+                        }
+                    };
+                    
+                    animationFrames.push(img);
+                }
+            });
+        }
+
+        // Initialize audio context on first user interaction and play fanfare
+        document.addEventListener('click', function initOnClick() {
+            if (!audioContext) {
+                initAudio();
+                // Play fanfare on first click (welcome to the game!)
+                setTimeout(() => playFanfare(), 100);
+            }
+            document.removeEventListener('click', initOnClick);
+        }, { once: true });
+
+        // Start the game with selected number of rounds
+        function startGame(rounds) {
+            totalRounds = rounds;
+            currentRound = 1;
+            pattern = [];
+            frogScale = 1.5; // Start 50% bigger
+            isInfinityMode = false; // Normal mode
+            gameSpeed = 1.25; // 25% faster than original
+            
+            // Reset all flags
+            isPlayingAnimation = false;
+            isPlayerTurn = false;
+            isPlayingPattern = false;
+            playerPattern = [];
+            
+            // Hide setup popup (game screen is always visible now)
+            document.getElementById('setup-screen').classList.add('hidden');
+            
+            // Reset frog container CSS variable
+            const frogContainer = document.getElementById('frog-container');
+            frogContainer.style.setProperty('--frog-scale', 1.5);
+            frogContainer.classList.remove('growing');
+            
+            // Reset GO button text and styling for normal mode
+            const goButton = document.getElementById('go-button');
+            goButton.textContent = 'GO!';
+            goButton.style.fontSize = '';
+            goButton.style.background = '';
+            goButton.style.borderColor = '';
+            goButton.style.color = '';
+            
+            // Preload animation frames then show GO button
+            preloadAnimationFrames().then(() => {
+                setTimeout(() => {
+                    showGoButton();
+                }, 500);
+            });
+        }
+
+        // Start Crazy Infinity Mode!
+        function startInfinityMode() {
+            totalRounds = Infinity; // Never ends!
+            currentRound = 1;
+            pattern = [];
+            frogScale = 1.5;
+            isInfinityMode = true; // Enable infinity mode
+            gameSpeed = 1.0; // Start at normal speed
+            
+            // Reset all flags
+            isPlayingAnimation = false;
+            isPlayerTurn = false;
+            isPlayingPattern = false;
+            playerPattern = [];
+            
+            // Hide setup popup
+            document.getElementById('setup-screen').classList.add('hidden');
+            
+            // Reset frog container
+            const frogContainer = document.getElementById('frog-container');
+            frogContainer.style.setProperty('--frog-scale', 1.5);
+            frogContainer.classList.remove('growing');
+            
+            // Set special GO button text for infinity mode
+            const goButton = document.getElementById('go-button');
+            goButton.textContent = '⚠️ WARNING! Starting Crazy Infinity Mode! ⚠️';
+            goButton.style.fontSize = '2rem';
+            goButton.style.background = 'linear-gradient(135deg, #FF4500 0%, #FF6B00 50%, #FFD700 100%)';
+            goButton.style.borderColor = '#FF0000';
+            goButton.style.color = 'white';
+            
+            // Preload animation frames then show GO button
+            preloadAnimationFrames().then(() => {
+                setTimeout(() => {
+                    showGoButton();
+                }, 500);
+            });
+        }
+
+        // Show the GO button
+        function showGoButton() {
+            document.getElementById('go-button').style.display = 'block';
+        }
+
+        // Handle GO button click
+        function handleGoButton() {
+            // Play ping sound
+            playPing();
+            
+            // Hide GO button
+            document.getElementById('go-button').style.display = 'none';
+            
+            // Activate game
+            gameActive = true;
+            
+            // Start the round
+            startRound();
+        }
+
+        // ============================================
+        // GAME LOGIC
+        // ============================================
+        
+        // Start a new round
+        function startRound() {
+            console.log('startRound called, currentRound:', currentRound, 'totalRounds:', totalRounds);
+            playerPattern = [];
+            isPlayerTurn = false;
+            
+            // Add one more step to the pattern
+            const randomPad = Math.floor(Math.random() * 4);
+            pattern.push(randomPad);
+            
+            console.log('Pattern is now:', pattern);
+            
+            // Update round display and make it visible
+            const roundDisplay = document.getElementById('round-display');
+            if (isInfinityMode) {
+                roundDisplay.textContent = `🔥 Round ${currentRound} 🔥`;
+            } else {
+                roundDisplay.textContent = `Round ${currentRound} of ${totalRounds}`;
+            }
+            roundDisplay.classList.add('visible');
+            
+            // Show lily pads
+            document.getElementById('lily-pad-container').classList.add('visible');
+            
+            // Show hint button only in infinity mode
+            if (isInfinityMode) {
+                document.getElementById('hint-button').classList.add('visible');
+            } else {
+                document.getElementById('hint-button').classList.remove('visible');
+            }
+            
+            // Show back button
+            document.getElementById('back-home-button').classList.add('visible');
+            
+            // Show pattern after brief delay
+            const timer = setTimeout(() => {
+                if (!gameActive) return; // Don't proceed if game was reset
+                showPattern();
+            }, 1000);
+            activeTimers.push(timer);
+        }
+
+        // Show the pattern to the player
+        async function showPattern() {
+            if (!gameActive) return; // Don't proceed if game was reset
+            
+            isPlayingPattern = true;
+            
+            // Calculate timing based on game speed (faster in infinity mode)
+            const delayBetweenPads = Math.max(150, 500 / gameSpeed); // Minimum 150ms
+            
+            for (let i = 0; i < pattern.length; i++) {
+                if (!gameActive) return; // Check between each pad
+                await lightUpPad(pattern[i]);
+                await delay(delayBetweenPads);
+            }
+            
+            if (!gameActive) return; // Check after loop
+            
+            isPlayingPattern = false;
+            
+            // Enable player input after pattern completes
+            const inputDelay = Math.max(100, 300 / gameSpeed);
+            const timer = setTimeout(() => {
+                if (!gameActive) return;
+                isPlayerTurn = true;
+            }, inputDelay);
+            activeTimers.push(timer);
+        }
+
+        // Light up a lily pad
+        function lightUpPad(padIndex) {
+            return new Promise((resolve) => {
+                const wrapper = document.querySelector(`[data-pad="${padIndex}"]`);
+                const pad = wrapper.querySelector('.lily-pad');
+                pad.classList.add('lit');
+                playNote(notes[padIndex]);
+                
+                // Faster light-up in infinity mode
+                const lightDuration = Math.max(100, 400 / gameSpeed);
+                setTimeout(() => {
+                    pad.classList.remove('lit');
+                    resolve();
+                }, lightDuration);
+            });
+        }
+
+        // Handle player input
+        function handlePlayerInput(padIndex) {
+            // Prevent input during animation
+            if (isPlayingAnimation) return;
+            
+            console.log('Player clicked pad:', padIndex, 'Pattern so far:', playerPattern, 'Target pattern:', pattern);
+            
+            // Clear any hint that was showing
+            clearHint();
+            
+            // Visual and audio feedback
+            const wrapper = document.querySelector(`[data-pad="${padIndex}"]`);
+            const pad = wrapper.querySelector('.lily-pad');
+            pad.classList.add('lit');
+            playNote(notes[padIndex]);
+            
+            setTimeout(() => {
+                pad.classList.remove('lit');
+            }, 300);
+            
+            // Add to player pattern
+            playerPattern.push(padIndex);
+            
+            // Check if input is correct
+            const currentIndex = playerPattern.length - 1;
+            
+            console.log('Checking input. Player pattern length:', playerPattern.length, 'Target pattern length:', pattern.length);
+            
+            if (playerPattern[currentIndex] !== pattern[currentIndex]) {
+                // Wrong answer
+                console.log('Wrong answer!');
+                handleWrongAnswer();
+            } else if (playerPattern.length === pattern.length) {
+                // Correct - completed the pattern
+                console.log('Pattern complete and correct!');
+                // Immediately disable input to prevent any race conditions
+                isPlayerTurn = false;
+                handleCorrectAnswer();
+            } else {
+                console.log('Correct so far, waiting for more input...');
+            }
+            // Otherwise, continue waiting for more input
+        }
+
+        // Handle wrong answer
+        function handleWrongAnswer() {
+            isPlayerTurn = false;
+            
+            // Shake all pads
+            document.querySelectorAll('.lily-pad').forEach(pad => {
+                pad.classList.add('shake');
+            });
+            
+            // Play buzzer
+            playBuzzer();
+            
+            // Show message
+            const message = document.getElementById('message-overlay');
+            message.textContent = 'Try again!';
+            message.style.display = 'block';
+            
+            const timer1 = setTimeout(() => {
+                if (!gameActive) return;
+                
+                // Remove shake effect
+                document.querySelectorAll('.lily-pad').forEach(pad => {
+                    pad.classList.remove('shake');
+                });
+                
+                // Hide message
+                message.style.display = 'none';
+                
+                // Replay the same pattern
+                playerPattern = [];
+                const timer2 = setTimeout(() => {
+                    if (!gameActive) return;
+                    showPattern();
+                }, 500);
+                activeTimers.push(timer2);
+            }, 1000);
+            activeTimers.push(timer1);
+        }
+
+        // Handle correct answer
+        function handleCorrectAnswer() {
+            console.log('handleCorrectAnswer called, isPlayingAnimation:', isPlayingAnimation);
+            
+            // Prevent double execution
+            if (isPlayingAnimation || !gameActive) {
+                console.log('Animation already playing or game inactive, ignoring');
+                return;
+            }
+            
+            isPlayerTurn = false;
+            isPlayingAnimation = true;
+            console.log('Starting animation, isPlayingAnimation set to true');
+            
+            // Play frog animation
+            playFrogAnimation().then(() => {
+                if (!gameActive) return; // Don't proceed if game was reset
+                
+                console.log('Animation complete, resetting isPlayingAnimation');
+                isPlayingAnimation = false;
+                
+                // Check if won (never true in infinity mode since totalRounds is Infinity)
+                if (currentRound >= totalRounds) {
+                    showWinScreen();
+                } else {
+                    // Next round
+                    currentRound++;
+                    
+                    // In infinity mode: increase speed each round
+                    if (isInfinityMode) {
+                        // Increase speed ~10.4% each round to hit 200% by round 8
+                        gameSpeed *= 1.104;
+                        console.log('Infinity Mode - Speed increased to:', gameSpeed);
+                    }
+                    
+                    // Go straight to next round after a brief pause (no GO button between rounds)
+                    const pauseBetweenRounds = Math.max(200, 500 / gameSpeed);
+                    const timer1 = setTimeout(() => {
+                        if (!gameActive) return;
+                        startRound();
+                    }, pauseBetweenRounds);
+                    activeTimers.push(timer1);
+                }
+            });
+        }
+
+        // Play the frog eating animation
+        function playFrogAnimation() {
+            console.log('playFrogAnimation called');
+            return new Promise((resolve) => {
+                if (!gameActive) {
+                    resolve();
+                    return;
+                }
+                
+                const frogImg = document.getElementById('frog');
+                const frogContainer = document.getElementById('frog-container');
+                let currentFrame = 0;
+                
+                // Animation plays faster based on game speed
+                const baseFps = 24;
+                const fps = baseFps * gameSpeed;
+                const frameInterval = 1000 / fps;
+                
+                console.log('Animation FPS:', fps, 'Frame interval:', frameInterval);
+                
+                // Play animation frames
+                const animationInterval = setInterval(() => {
+                    // Check if game was reset
+                    if (!gameActive) {
+                        clearInterval(animationInterval);
+                        resolve();
+                        return;
+                    }
+                    
+                    if (currentFrame < animationFrames.length) {
+                        frogImg.src = animationFrames[currentFrame].src;
+                        currentFrame++;
+                    } else {
+                        clearInterval(animationInterval);
+                        
+                        // Return to static frog
+                        frogImg.src = 'frogstatic.png';
+                        
+                        // Grow the frog - 15% bigger each time!
+                        frogScale *= 1.15;
+                        
+                        // Set CSS variable for animation
+                        frogContainer.style.setProperty('--frog-scale', frogScale);
+                        
+                        // Play growth sound
+                        playGrowSound();
+                        
+                        // Add growing animation class with dynamic duration based on game speed
+                        const growAnimDuration = Math.max(200, 600 / gameSpeed);
+                        frogContainer.style.animationDuration = growAnimDuration + 'ms';
+                        frogContainer.classList.add('growing');
+                        
+                        // After animation, remove class and set final transform
+                        setTimeout(() => {
+                            frogContainer.classList.remove('growing');
+                            frogContainer.style.transform = 
+                                `translate(-50%, -50%) scale(${frogScale})`;
+                        }, growAnimDuration);
+                        
+                        console.log('Frog grew! New scale:', frogScale);
+                        resolve();
+                    }
+                }, frameInterval);
+                activeIntervals.push(animationInterval);
+            });
+        }
+
+        // Show win screen with confetti
+        function showWinScreen() {
+            document.getElementById('win-screen').style.display = 'flex';
+            playCelebration();
+            createConfetti();
+        }
+
+        // Create falling confetti
+        function createConfetti() {
+            const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#FFD93D'];
+            const confettiCount = 100;
+            
+            for (let i = 0; i < confettiCount; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                    
+                    document.getElementById('game-container').appendChild(confetti);
+                    
+                    // Remove confetti after animation
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 5000);
+                }, i * 30);
+            }
+        }
+
+        // Clear all active timers and intervals (hard reset)
+        function clearAllTimers() {
+            // Clear all tracked timers
+            activeTimers.forEach(timer => clearTimeout(timer));
+            activeTimers = [];
+            
+            // Clear all tracked intervals
+            activeIntervals.forEach(interval => clearInterval(interval));
+            activeIntervals = [];
+            
+            // Set game inactive to stop any async loops
+            gameActive = false;
+            
+            console.log('All timers and intervals cleared');
+        }
+
+        // Return to home screen (called by Back button or ESC key)
+        function returnToHome() {
+            // HARD RESET - Clear all running processes
+            clearAllTimers();
+            
+            // Play fanfare when returning home
+            playFanfare();
+            
+            // Hide win screen if it's showing
+            document.getElementById('win-screen').style.display = 'none';
+            
+            // Hide message overlay if showing
+            document.getElementById('message-overlay').style.display = 'none';
+            
+            // Clear any visual effects on lily pads (including hints)
+            document.querySelectorAll('.lily-pad').forEach(pad => {
+                pad.classList.remove('lit', 'shake', 'hint');
+            });
+            
+            // Hide hint button
+            document.getElementById('hint-button').classList.remove('visible');
+            
+            // Show setup popup (game screen stays visible)
+            document.getElementById('setup-screen').classList.remove('hidden');
+            
+            // Hide round display, lily pads, and back button
+            document.getElementById('round-display').classList.remove('visible');
+            document.getElementById('lily-pad-container').classList.remove('visible');
+            document.getElementById('back-home-button').classList.remove('visible');
+            
+            // Reset frog size and image
+            frogScale = 1.5; // Back to starting size (50% bigger than original)
+            const frogContainer = document.getElementById('frog-container');
+            frogContainer.style.setProperty('--frog-scale', 1.5);
+            frogContainer.style.transform = 'translate(-50%, -50%) scale(1.5)';
+            frogContainer.classList.remove('growing'); // Remove any animation class
+            document.getElementById('frog').src = 'frogstatic.png';
+            
+            // Hide GO button and reset its styling
+            const goButton = document.getElementById('go-button');
+            goButton.style.display = 'none';
+            goButton.textContent = 'GO!';
+            goButton.style.fontSize = ''; // Reset to default
+            goButton.style.background = ''; // Reset to default
+            goButton.style.borderColor = ''; // Reset to default
+            goButton.style.color = ''; // Reset to default
+            
+            // Reset game state
+            pattern = [];
+            playerPattern = [];
+            currentRound = 1;
+            isPlayingAnimation = false;
+            isPlayerTurn = false;
+            isPlayingPattern = false;
+            isInfinityMode = false;
+            gameSpeed = 1.0;
+        }
+
+        // Reset game and return to setup (same as returnToHome, used by Play Again button)
+        function resetGame() {
+            returnToHome(); // Just call the returnToHome function
+        }
+
+        // Utility delay function
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // Show hint - light up the next correct lily pad
+        function showHint() {
+            // Log current state for debugging
+            console.log('showHint called - isPlayerTurn:', isPlayerTurn, 
+                        'isInfinityMode:', isInfinityMode, 
+                        'isPlayingPattern:', isPlayingPattern, 
+                        'isPlayingAnimation:', isPlayingAnimation);
+            
+            // Only works during player's turn in infinity mode
+            if (!isPlayerTurn || !isInfinityMode || isPlayingPattern || isPlayingAnimation) {
+                console.log('Hint not available - conditions not met');
+                return;
+            }
+            
+            // Figure out which pad is next in the sequence
+            const nextIndex = playerPattern.length;
+            const nextPad = pattern[nextIndex];
+            
+            console.log('Hint: Next pad is', nextPad);
+            
+            // Clear any existing hints first
+            clearHint();
+            
+            // Light up the correct pad with hint effect
+            const wrapper = document.querySelector(`[data-pad="${nextPad}"]`);
+            const pad = wrapper.querySelector('.lily-pad');
+            pad.classList.add('hint');
+        }
+
+        // Clear any active hint
+        function clearHint() {
+            document.querySelectorAll('.lily-pad').forEach(pad => {
+                pad.classList.remove('hint');
+            });
+        }
+    </script>
+</body>
+</html>
