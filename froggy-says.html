@@ -87,6 +87,78 @@
             z-index: 2;
         }
 
+        /* Sound enable overlay - appears first on mobile */
+        #sound-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 200;
+            cursor: pointer;
+        }
+
+        #sound-overlay.hidden {
+            display: none;
+        }
+
+        #sound-overlay h2 {
+            font-size: 2.5rem;
+            color: #FFD700;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            margin-bottom: 2rem;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        #sound-overlay .sound-button {
+            font-size: 3rem;
+            padding: 30px 60px;
+            background: linear-gradient(135deg, #4CAF50 0%, #2E8B57 100%);
+            color: white;
+            border: 5px solid #228B22;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+            animation: soundPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes soundPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        #sound-overlay .sound-button:active {
+            transform: scale(0.95);
+            animation: none;
+        }
+
+        #sound-overlay p {
+            margin-top: 1.5rem;
+            color: rgba(255,255,255,0.7);
+            font-size: 1.2rem;
+        }
+
+        @media (max-width: 480px) {
+            #sound-overlay h2 {
+                font-size: 1.8rem;
+            }
+            #sound-overlay .sound-button {
+                font-size: 2rem;
+                padding: 25px 50px;
+            }
+            #sound-overlay p {
+                font-size: 1rem;
+            }
+        }
+
         /* Setup screen styles */
         /* Setup popup overlay */
         #setup-screen {
@@ -744,6 +816,13 @@
 </head>
 <body>
     <div id="game-container">
+        <!-- Sound Enable Overlay (for mobile) -->
+        <div id="sound-overlay">
+            <h2>🐸 Froggy Says! 🐸</h2>
+            <button class="sound-button">🔊 Tap to Start!</button>
+            <p>Sound will be enabled</p>
+        </div>
+
         <!-- Setup Screen -->
         <div id="setup-screen">
             <h1>Froggy Says!<br>A game for Theo!</h1>
@@ -1212,26 +1291,61 @@
             });
         }
 
-        // Initialize audio on ANY user interaction (aggressive approach for mobile)
-        // We keep trying on every interaction until audio works
-        let fanfarePlayed = false;
+        // Handle the "Enable Sound" button - this is the KEY for iOS
+        const soundOverlay = document.getElementById('sound-overlay');
+        const soundButton = soundOverlay.querySelector('.sound-button');
         
-        function handleFirstInteraction(e) {
-            console.log('User interaction detected:', e.type);
-            ensureAudioUnlocked();
+        soundButton.addEventListener('touchstart', enableSoundAndStart, { passive: false });
+        soundButton.addEventListener('click', enableSoundAndStart);
+        
+        // Also allow tapping anywhere on the overlay
+        soundOverlay.addEventListener('touchstart', enableSoundAndStart, { passive: false });
+        soundOverlay.addEventListener('click', enableSoundAndStart);
+        
+        function enableSoundAndStart(e) {
+            e.preventDefault();
+            e.stopPropagation();
             
-            // Only play fanfare once
-            if (!fanfarePlayed && audioContext && audioContext.state === 'running') {
-                console.log('Playing fanfare!');
-                fanfarePlayed = true;
-                playFanfare();
+            console.log('Enable sound button pressed!');
+            
+            // Initialize and unlock audio RIGHT HERE in the touch handler
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('AudioContext created in touch handler');
             }
+            
+            // Resume immediately
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+                console.log('AudioContext resumed');
+            }
+            
+            // Play actual sound to fully unlock (not silent!)
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 440;
+                gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.1);
+                console.log('Unlock sound played!');
+                audioUnlocked = true;
+            } catch (err) {
+                console.error('Error playing unlock sound:', err);
+            }
+            
+            // Hide the overlay
+            soundOverlay.classList.add('hidden');
+            
+            // Play fanfare after a tiny delay
+            setTimeout(() => {
+                playFanfare();
+            }, 150);
         }
-        
-        // Listen on the whole document for any touch/click
-        document.addEventListener('touchstart', handleFirstInteraction, { passive: true });
-        document.addEventListener('touchend', handleFirstInteraction, { passive: true });
-        document.addEventListener('click', handleFirstInteraction);
 
         // Start the game with selected number of rounds
         function startGame(rounds) {
