@@ -987,8 +987,6 @@
         // AUDIO SETUP (Uses mp3 assets with WebAudio fallback)
         // ============================================
         let audioUnlocked = false;
-        const audioElements = {};
-
         const audioSources = {
             pad0: 'c.mp3',
             pad1: 'e.mp3',
@@ -1001,26 +999,65 @@
             ribbit: 'g.mp3'     // reuse G as ribbit
         };
 
+        // Simple per-sound audio pool to avoid hitting iOS/HTMLAudio node limits
+        const audioPools = {};
+        const POOL_SIZE = 6; // per sound
+
         function loadAudioElements() {
             Object.entries(audioSources).forEach(([key, src]) => {
-                const el = new Audio(src);
-                el.preload = 'auto';
-                el.setAttribute('playsinline', '');
-                el.setAttribute('webkit-playsinline', '');
-                audioElements[key] = el;
+                audioPools[key] = [];
+                for (let i = 0; i < POOL_SIZE; i++) {
+                    const el = new Audio(src);
+                    el.preload = 'auto';
+                    el.setAttribute('playsinline', '');
+                    el.setAttribute('webkit-playsinline', '');
+                    el.inUse = false;
+                    audioPools[key].push(el);
+                }
             });
         }
 
+        function getPooledAudio(key) {
+            const pool = audioPools[key];
+            if (!pool) return null;
+            // Find free
+            let audio = pool.find(a => !a.inUse);
+            if (!audio) {
+                // find one that finished
+                audio = pool.find(a => a.ended || a.paused || (a.currentTime >= (a.duration - 0.05)));
+            }
+            if (!audio) {
+                // fallback to first
+                audio = pool[0];
+            }
+            if (!audio) return null;
+            audio.pause();
+            audio.currentTime = 0;
+            audio.inUse = true;
+            // mark free when done
+            audio.onended = () => { audio.inUse = false; };
+            return audio;
+        }
+
+        // Light cleanup interval to release stuck audios
+        setInterval(() => {
+            Object.values(audioPools).forEach(pool => {
+                pool.forEach(a => {
+                    if (a.ended || a.paused || (a.currentTime >= (a.duration - 0.05))) {
+                        a.inUse = false;
+                    }
+                });
+            });
+        }, 5000);
+
         function playHtmlAudio(key) {
-            const base = audioElements[key];
-            if (!base) return false;
+            const audio = getPooledAudio(key);
+            if (!audio) return false;
             try {
-                const clone = base.cloneNode(true);
-                clone.currentTime = 0;
-                clone.volume = 1.0;
-                clone.play().catch(() => {});
+                audio.play().catch(() => { audio.inUse = false; });
                 return true;
             } catch (e) {
+                audio.inUse = false;
                 return false;
             }
         }
