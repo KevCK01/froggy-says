@@ -44,7 +44,9 @@
             font-family: 'Comic Sans MS', 'Arial Rounded MT Bold', cursive, sans-serif;
             overflow: hidden;
             width: 100vw;
+            /* Use dvh (dynamic viewport height) with vh fallback for older browsers */
             height: 100vh;
+            height: 100dvh;
             background: #87CEEB;
             /* Mobile optimizations */
             overscroll-behavior: none; /* Prevent pull-to-refresh and overscroll */
@@ -52,6 +54,8 @@
             position: fixed; /* Prevent iOS bounce scroll */
             top: 0;
             left: 0;
+            /* Account for safe areas (notches, home indicators) */
+            padding-bottom: env(safe-area-inset-bottom, 0);
         }
 
         /* Background container */
@@ -66,6 +70,8 @@
             flex-direction: column;
             justify-content: space-between;
             align-items: center;
+            /* Extra bottom padding for mobile browser chrome */
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
         }
 
         /* 20% black overlay on background */
@@ -321,6 +327,8 @@
             display: flex;
             gap: 30px;
             margin-bottom: 40px;
+            /* Extra margin for mobile browser bars */
+            margin-bottom: calc(40px + env(safe-area-inset-bottom, 0));
             justify-content: center;
             flex-wrap: wrap;
             opacity: 0; /* Hidden until game starts */
@@ -687,7 +695,8 @@
             }
             #lily-pad-container {
                 gap: 8px;
-                margin-bottom: 15px;
+                /* Extra bottom margin for mobile browser chrome */
+                margin-bottom: calc(25px + env(safe-area-inset-bottom, 0));
             }
             #hint-button {
                 width: 50px;
@@ -736,6 +745,7 @@
             }
             #lily-pad-container {
                 gap: 5px;
+                margin-bottom: calc(20px + env(safe-area-inset-bottom, 0));
             }
             #go-button {
                 font-size: 2rem;
@@ -789,6 +799,7 @@
         @media (max-height: 500px) and (orientation: landscape) {
             #game-screen {
                 padding: 10px;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
             }
             #round-display {
                 font-size: 1.2rem;
@@ -799,7 +810,7 @@
                 height: 80px;
             }
             #lily-pad-container {
-                margin-bottom: 10px;
+                margin-bottom: calc(10px + env(safe-area-inset-bottom, 0));
             }
             #frog {
                 max-width: 120px;
