@@ -921,46 +921,88 @@
         });
         
         // ============================================
-        // AUDIO SETUP
+        // AUDIO SETUP (Mobile-friendly)
         // ============================================
+        let audioUnlocked = false;
+        
         function initAudio() {
             if (!audioContext) {
+                console.log('Creating AudioContext...');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            // CRITICAL for mobile: Resume suspended audio context
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
+                console.log('AudioContext created, state:', audioContext.state);
             }
         }
 
-        // Ensure audio is unlocked (call on any user interaction)
+        // CRITICAL: This must be called from a direct user gesture (touch/click)
+        // iOS Safari requires actual audio to play, not just resume()
         function ensureAudioUnlocked() {
+            console.log('ensureAudioUnlocked called, audioUnlocked:', audioUnlocked);
+            
             if (!audioContext) {
                 initAudio();
-            } else if (audioContext.state === 'suspended') {
-                audioContext.resume();
+            }
+            
+            // Always try to resume if suspended
+            if (audioContext.state === 'suspended') {
+                console.log('Resuming suspended AudioContext...');
+                audioContext.resume().then(() => {
+                    console.log('AudioContext resumed, new state:', audioContext.state);
+                });
+            }
+            
+            // iOS Safari trick: Play a tiny sound to fully unlock
+            // This is required even after resume() on some iOS versions
+            if (!audioUnlocked && audioContext) {
+                console.log('Playing unlock sound...');
+                try {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    // Nearly silent but not zero (zero doesn't unlock on some devices)
+                    gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.1);
+                    
+                    audioUnlocked = true;
+                    console.log('Audio unlock sound played!');
+                } catch (e) {
+                    console.error('Audio unlock failed:', e);
+                }
             }
         }
 
         // Play a musical note for lily pad
         function playNote(frequency, duration = 0.3) {
+            console.log('playNote called, freq:', frequency, 'audioContext:', !!audioContext);
+            
             if (!audioContext) initAudio();
             ensureAudioUnlocked();
             
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
+            console.log('AudioContext state:', audioContext.state);
             
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.type = 'triangle'; // Pleasant sound
-            oscillator.frequency.value = frequency;
-            
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + duration);
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'triangle'; // Pleasant sound
+                oscillator.frequency.value = frequency;
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration);
+                console.log('Note started playing!');
+            } catch (e) {
+                console.error('Error playing note:', e);
+            }
         }
 
         // Note frequencies for each lily pad
@@ -1157,27 +1199,26 @@
             });
         }
 
-        // Initialize audio context on first user interaction and play fanfare
-        // CRITICAL for mobile: Audio must be triggered DIRECTLY from user gesture
-        document.addEventListener('touchstart', unlockAudio, { once: true });
-        document.addEventListener('click', unlockAudio, { once: true });
+        // Initialize audio on ANY user interaction (aggressive approach for mobile)
+        // We keep trying on every interaction until audio works
+        let fanfarePlayed = false;
         
-        function unlockAudio() {
-            initAudio();
-            // Play a silent buffer to fully unlock audio on iOS
-            if (audioContext) {
-                const buffer = audioContext.createBuffer(1, 1, 22050);
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-                source.start(0);
+        function handleFirstInteraction(e) {
+            console.log('User interaction detected:', e.type);
+            ensureAudioUnlocked();
+            
+            // Only play fanfare once
+            if (!fanfarePlayed && audioContext && audioContext.state === 'running') {
+                console.log('Playing fanfare!');
+                fanfarePlayed = true;
+                playFanfare();
             }
-            // Play fanfare DIRECTLY (no setTimeout - that breaks mobile!)
-            playFanfare();
-            // Remove the other listener since we only need one
-            document.removeEventListener('touchstart', unlockAudio);
-            document.removeEventListener('click', unlockAudio);
         }
+        
+        // Listen on the whole document for any touch/click
+        document.addEventListener('touchstart', handleFirstInteraction, { passive: true });
+        document.addEventListener('touchend', handleFirstInteraction, { passive: true });
+        document.addEventListener('click', handleFirstInteraction);
 
         // Start the game with selected number of rounds
         function startGame(rounds) {
