@@ -921,41 +921,17 @@
                 console.error('Setup screen not found!');
             }
 
-            // Add event listeners to round buttons (unlock audio on each click for mobile)
-            document.getElementById('btn-4').addEventListener('click', () => {
-                console.log('4 rounds clicked');
-                ensureAudioUnlocked();
-                startGame(4);
-            });
-            document.getElementById('btn-6').addEventListener('click', () => {
-                console.log('6 rounds clicked');
-                ensureAudioUnlocked();
-                startGame(6);
-            });
-            document.getElementById('btn-8').addEventListener('click', () => {
-                console.log('8 rounds clicked');
-                ensureAudioUnlocked();
-                startGame(8);
-            });
-            document.getElementById('btn-10').addEventListener('click', () => {
-                console.log('10 rounds clicked');
-                ensureAudioUnlocked();
-                startGame(10);
-            });
+            // Add event listeners to round buttons
+            document.getElementById('btn-4').addEventListener('click', () => startGame(4));
+            document.getElementById('btn-6').addEventListener('click', () => startGame(6));
+            document.getElementById('btn-8').addEventListener('click', () => startGame(8));
+            document.getElementById('btn-10').addEventListener('click', () => startGame(10));
 
             // Add event listener for Infinity Mode button
-            document.getElementById('btn-infinity').addEventListener('click', () => {
-                console.log('Infinity Mode clicked');
-                ensureAudioUnlocked();
-                startInfinityMode();
-            });
+            document.getElementById('btn-infinity').addEventListener('click', () => startInfinityMode());
 
-            // Add event listener to GO button (critical - this is where game audio starts)
-            document.getElementById('go-button').addEventListener('click', () => {
-                console.log('GO button clicked');
-                ensureAudioUnlocked();
-                handleGoButton();
-            });
+            // Add event listener to GO button
+            document.getElementById('go-button').addEventListener('click', () => handleGoButton());
 
             // Add event listener to Play Again button
             document.getElementById('play-again-button').addEventListener('click', () => {
@@ -986,13 +962,10 @@
             });
 
             // Add event listeners to lily pads (on the wrapper for click handling)
-            // Using pointerdown for immediate response - no drag issues
             document.querySelectorAll('.lily-pad-wrapper').forEach(wrapper => {
                 wrapper.addEventListener('pointerdown', (e) => {
-                    e.preventDefault(); // Prevent any default drag behavior
-                    ensureAudioUnlocked(); // Unlock audio on every touch for mobile
+                    e.preventDefault();
                     if (!isPlayerTurn || isPlayingPattern || isPlayingAnimation) return;
-                    
                     const padIndex = parseInt(wrapper.dataset.pad);
                     handlePlayerInput(padIndex);
                 });
@@ -1011,104 +984,45 @@
         });
         
         // ============================================
-        // AUDIO SETUP (iOS-friendly approach)
+        // AUDIO SETUP (Simplified for iOS)
         // ============================================
         let audioUnlocked = false;
         
-        // Create a silent audio element for iOS priming
-        const silentAudio = new Audio("data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAAGn9AAAIAAANIAAAARMQJEMBAMDAoPB4PP/BwfT/Lh4AAAABg8HwfB/5c/KAgGDw+D4P//lwEBgYPB4PB4PwfB//5cAAAAD5d////+XAQCAYPDw+DweBwf///l/8uAgMDA4MHh8Hg//5cPw//8vn////y4efPPPPPPPPPPPPPPPPPPPPPPPPPP/7UMQEgAjMOXf09oAhEgcwPpyQBPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP/7UMQWgAAADSAAAAAAAANIAAAATPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP");
-        silentAudio.setAttribute('playsinline', '');
-        silentAudio.setAttribute('webkit-playsinline', '');
-        silentAudio.volume = 0.5; // Not too quiet - iOS might ignore very quiet audio
-        silentAudio.volume = 0.01;
-        
         function initAudio() {
             if (!audioContext) {
-                console.log('Creating AudioContext...');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                console.log('AudioContext created, state:', audioContext.state);
             }
         }
 
-        // CRITICAL: This must be called from a direct user gesture (touch/click)
         function ensureAudioUnlocked() {
-            console.log('ensureAudioUnlocked called, state:', audioContext?.state, 'unlocked:', audioUnlocked);
-            
-            // Step 1: Create context if needed
-            if (!audioContext) {
-                initAudio();
-            }
-            
-            // Step 2: Always try to resume
+            if (!audioContext) initAudio();
             if (audioContext && audioContext.state === 'suspended') {
-                console.log('Resuming AudioContext...');
                 audioContext.resume();
-            }
-            
-            // Step 3: iOS trick - play the silent HTML5 audio to "prime" audio
-            if (!audioUnlocked) {
-                console.log('Priming audio with silent mp3...');
-                silentAudio.play().then(() => {
-                    console.log('Silent audio played successfully!');
-                    audioUnlocked = true;
-                }).catch(e => {
-                    console.log('Silent audio blocked (expected on first load):', e.message);
-                });
-                
-                // Also try oscillator approach as backup
-                if (audioContext) {
-                    try {
-                        const oscillator = audioContext.createOscillator();
-                        const gainNode = audioContext.createGain();
-                        oscillator.connect(gainNode);
-                        gainNode.connect(audioContext.destination);
-                        gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
-                        oscillator.start(audioContext.currentTime);
-                        oscillator.stop(audioContext.currentTime + 0.05);
-                        console.log('Oscillator unlock attempted');
-                    } catch (e) {
-                        console.log('Oscillator unlock failed:', e);
-                    }
-                }
             }
         }
 
         // Play a musical note for lily pad
         function playNote(frequency, duration = 0.3) {
-            console.log('playNote called, freq:', frequency);
+            if (!audioContext) return; // Audio not initialized yet
             
-            if (!audioContext) initAudio();
-            
-            // Force resume every time on mobile
-            if (audioContext && audioContext.state !== 'running') {
-                console.log('AudioContext not running, attempting resume...');
+            if (audioContext.state === 'suspended') {
                 audioContext.resume();
             }
             
-            console.log('AudioContext state:', audioContext?.state);
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
             
-            // Small delay to let resume take effect on iOS
-            setTimeout(() => {
-                try {
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
-                    
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    oscillator.type = 'triangle';
-                    oscillator.frequency.value = frequency;
-                    
-                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-                    
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + duration);
-                    console.log('Note playing! State:', audioContext.state);
-                } catch (e) {
-                    console.error('Error playing note:', e);
-                }
-            }, 10);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'triangle';
+            oscillator.frequency.value = frequency;
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
         }
 
         // Note frequencies for each lily pad
@@ -1121,8 +1035,7 @@
 
         // Play ribbit sound
         function playRibbit() {
-            if (!audioContext) initAudio();
-            ensureAudioUnlocked();
+            if (!audioContext) return;
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1143,8 +1056,7 @@
 
         // Play buzzer sound for wrong answer
         function playBuzzer() {
-            if (!audioContext) initAudio();
-            ensureAudioUnlocked();
+            if (!audioContext) return;
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1164,8 +1076,7 @@
 
         // Play celebration sound
         function playCelebration() {
-            if (!audioContext) initAudio();
-            ensureAudioUnlocked();
+            if (!audioContext) return;
             
             const frequencies = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
             
@@ -1191,8 +1102,7 @@
 
         // Play ping sound for GO button
         function playPing() {
-            if (!audioContext) initAudio();
-            ensureAudioUnlocked();
+            if (!audioContext) return;
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1212,8 +1122,7 @@
 
         // Play fanfare for homepage
         function playFanfare() {
-            if (!audioContext) initAudio();
-            ensureAudioUnlocked();
+            if (!audioContext) return;
             
             // Cheerful ascending fanfare notes (C major arpeggio + octave)
             const notes = [
@@ -1245,8 +1154,7 @@
 
         // Play growth sound when frog gets bigger
         function playGrowSound() {
-            if (!audioContext) initAudio();
-            ensureAudioUnlocked();
+            if (!audioContext) return;
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1305,92 +1213,46 @@
             });
         }
 
-        // Handle the "Enable Sound" button - this is the KEY for iOS
+        // Handle the "Enable Sound" button - SIMPLIFIED for iOS
         const soundOverlay = document.getElementById('sound-overlay');
         const soundButton = soundOverlay.querySelector('.sound-button');
         
-        // Use touchend on iOS - it's more reliable than touchstart for audio
-        soundButton.addEventListener('touchend', enableSoundAndStart, { passive: false });
-        soundButton.addEventListener('click', enableSoundAndStart);
-        soundOverlay.addEventListener('touchend', enableSoundAndStart, { passive: false });
-        soundOverlay.addEventListener('click', enableSoundAndStart);
+        let soundEnabled = false;
         
-        let soundEnableAttempted = false;
-        
-        function enableSoundAndStart(e) {
-            // Prevent double-firing from touch + click
-            if (soundEnableAttempted) return;
-            soundEnableAttempted = true;
+        function enableSound(e) {
+            if (soundEnabled) return;
+            soundEnabled = true;
             
             e.preventDefault();
-            e.stopPropagation();
             
-            console.log('Enable sound button pressed! Event:', e.type);
-            
-            // iOS SPECIFIC: Create AudioContext fresh in the gesture handler
-            if (audioContext) {
-                audioContext.close(); // Close any existing context
-            }
-            
-            // Create new context - MUST happen in touch/click handler for iOS
+            // Step 1: Create AudioContext (must be in user gesture)
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('Fresh AudioContext created, state:', audioContext.state);
             
-            // iOS: Resume is required even on new context sometimes
-            const resumePromise = audioContext.resume();
-            console.log('Resume called');
+            // Step 2: Resume it (required for iOS)
+            audioContext.resume();
             
-            // iOS TRICK: Create and play a buffer source (more reliable than oscillator on iOS)
-            try {
-                // Create a tiny audio buffer (1 sample of silence)
-                const buffer = audioContext.createBuffer(1, 1, 22050);
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-                source.start(0);
-                console.log('Buffer source played');
-            } catch (err) {
-                console.error('Buffer play failed:', err);
-            }
+            // Step 3: Play a real sound immediately (this unlocks iOS audio)
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.frequency.value = 520;
+            gain.gain.value = 0.3;
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.1);
             
-            // ALSO try oscillator as backup
-            try {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                oscillator.type = 'sine';
-                oscillator.frequency.value = 440;
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-                oscillator.start(0);
-                oscillator.stop(audioContext.currentTime + 0.15);
-                console.log('Oscillator started');
-                audioUnlocked = true;
-            } catch (err) {
-                console.error('Oscillator failed:', err);
-            }
+            audioUnlocked = true;
             
-            // ALSO try HTML5 Audio as another backup
-            try {
-                silentAudio.play();
-                console.log('HTML5 Audio played');
-            } catch (err) {
-                console.log('HTML5 Audio failed:', err);
-            }
-            
-            // Hide overlay
+            // Hide overlay and play fanfare
             soundOverlay.classList.add('hidden');
-            
-            // Wait for resume to complete, then play fanfare
-            Promise.resolve(resumePromise).then(() => {
-                console.log('AudioContext state after resume:', audioContext.state);
-                setTimeout(() => {
-                    console.log('Playing fanfare, state:', audioContext.state);
-                    playFanfare();
-                }, 100);
-            });
+            setTimeout(playFanfare, 150);
         }
+        
+        // Listen for both touch and click
+        soundButton.addEventListener('touchend', enableSound);
+        soundButton.addEventListener('click', enableSound);
+        soundOverlay.addEventListener('touchend', enableSound);
+        soundOverlay.addEventListener('click', enableSound);
 
         // Start the game with selected number of rounds
         function startGame(rounds) {
