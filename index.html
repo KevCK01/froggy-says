@@ -984,76 +984,44 @@
         });
         
         // ============================================
-        // AUDIO SETUP (Simplified + HTMLAudio fallback)
+        // AUDIO SETUP (Uses mp3 assets with WebAudio fallback)
         // ============================================
         let audioUnlocked = false;
-        const fallbackCache = {};
-        const fallbackAudios = {};
+        const audioElements = {};
 
-        // Build a tiny WAV data URI for a sine beep (runtime generation, no assets)
-        function makeWavDataUri(freq = 440, duration = 0.3, volume = 0.35) {
-            const sampleRate = 44100;
-            const totalSamples = Math.floor(sampleRate * duration);
-            const bytesPerSample = 2;
-            const blockAlign = bytesPerSample;
-            const byteRate = sampleRate * blockAlign;
-            const dataSize = totalSamples * bytesPerSample;
-            const buffer = new ArrayBuffer(44 + dataSize);
-            const view = new DataView(buffer);
-            let offset = 0;
-            function writeStr(s) { for (let i = 0; i < s.length; i++) view.setUint8(offset++, s.charCodeAt(i)); }
-            function writeUint32(v) { view.setUint32(offset, v, true); offset += 4; }
-            function writeUint16(v) { view.setUint16(offset, v, true); offset += 2; }
-            // RIFF header
-            writeStr('RIFF');
-            writeUint32(36 + dataSize);
-            writeStr('WAVE');
-            // fmt chunk
-            writeStr('fmt ');
-            writeUint32(16); // PCM
-            writeUint16(1);  // PCM
-            writeUint16(1);  // mono
-            writeUint32(sampleRate);
-            writeUint32(byteRate);
-            writeUint16(blockAlign);
-            writeUint16(16); // bits
-            // data chunk
-            writeStr('data');
-            writeUint32(dataSize);
-            // samples
-            for (let i = 0; i < totalSamples; i++) {
-                const t = i / sampleRate;
-                const sample = Math.sin(2 * Math.PI * freq * t) * volume;
-                view.setInt16(offset, sample * 0x7fff, true);
-                offset += 2;
-            }
-            // Convert to base64
-            const u8 = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
-            return 'data:audio/wav;base64,' + btoa(binary);
+        const audioSources = {
+            pad0: 'c.mp3',
+            pad1: 'e.mp3',
+            pad2: 'g.mp3',
+            pad3: 'b.mp3',
+            buzzer: 'buzzer.mp3',
+            fanfare: 'fanfare.mp3',
+            grow: 'grow.mp3',
+            ping: 'c.mp3',      // reuse C as ping
+            ribbit: 'g.mp3'     // reuse G as ribbit
+        };
+
+        function loadAudioElements() {
+            Object.entries(audioSources).forEach(([key, src]) => {
+                const el = new Audio(src);
+                el.preload = 'auto';
+                el.setAttribute('playsinline', '');
+                el.setAttribute('webkit-playsinline', '');
+                audioElements[key] = el;
+            });
         }
 
-        function getFallbackAudio(freq = 440, duration = 0.3, volume = 0.35) {
-            const key = `${freq}-${duration}-${volume}`;
-            if (!fallbackCache[key]) {
-                fallbackCache[key] = makeWavDataUri(freq, duration, volume);
-            }
-            const audio = new Audio(fallbackCache[key]);
-            audio.preload = 'auto';
-            audio.setAttribute('playsinline', '');
-            audio.setAttribute('webkit-playsinline', '');
-            return audio;
-        }
-
-        function playFallback(freq = 440, duration = 0.3, volume = 0.35) {
+        function playHtmlAudio(key) {
+            const base = audioElements[key];
+            if (!base) return false;
             try {
-                const a = getFallbackAudio(freq, duration, volume);
-                a.currentTime = 0;
-                a.volume = 1.0;
-                a.play().catch(() => {});
+                const clone = base.cloneNode(true);
+                clone.currentTime = 0;
+                clone.volume = 1.0;
+                clone.play().catch(() => {});
+                return true;
             } catch (e) {
-                console.log('Fallback audio failed', e);
+                return false;
             }
         }
 
@@ -1076,6 +1044,14 @@
             if (audioContext.state === 'suspended') {
                 audioContext.resume();
             }
+            const padKey = {
+                261.63: 'pad0',
+                329.63: 'pad1',
+                392.00: 'pad2',
+                493.88: 'pad3'
+            }[frequency];
+            if (padKey && playHtmlAudio(padKey)) return;
+            // Fallback to WebAudio oscillator
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -1087,10 +1063,7 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + duration);
-            } catch (e) {
-                // Fallback to HTMLAudio
-                playFallback(frequency, duration, 0.35);
-            }
+            } catch (e) {}
         }
 
         // Note frequencies for each lily pad
@@ -1107,7 +1080,7 @@
             if (audioContext.state === 'suspended') {
                 audioContext.resume();
             }
-            
+            if (playHtmlAudio('ribbit')) return;
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -1120,9 +1093,7 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
                 oscillator.start(audioContext.currentTime);
                 oscillator.stop(audioContext.currentTime + 0.2);
-            } catch (e) {
-                playFallback(200, 0.2, 0.4);
-            }
+            } catch (e) {}
         }
 
         // Play buzzer sound for wrong answer
@@ -1132,6 +1103,7 @@
                 audioContext.resume();
             }
             
+            if (playHtmlAudio('buzzer')) return;
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -1143,9 +1115,7 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
                 oscillator.start(audioContext.currentTime);
                 oscillator.stop(audioContext.currentTime + 0.5);
-            } catch (e) {
-                playFallback(120, 0.5, 0.25);
-            }
+            } catch (e) {}
         }
 
         // Play celebration sound
@@ -1171,7 +1141,7 @@
                         oscillator.start(audioContext.currentTime);
                         oscillator.stop(audioContext.currentTime + 0.5);
                     } catch (e) {
-                        playFallback(freq, 0.5, 0.35);
+                        playHtmlAudio('fanfare');
                     }
                 }, index * 150);
             });
@@ -1184,6 +1154,7 @@
                 audioContext.resume();
             }
             
+            if (playHtmlAudio('ping')) return;
             try {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -1195,9 +1166,7 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
                 oscillator.start(audioContext.currentTime);
                 oscillator.stop(audioContext.currentTime + 0.15);
-            } catch (e) {
-                playFallback(800, 0.15, 0.4);
-            }
+            } catch (e) {}
         }
 
         // Play fanfare for homepage
@@ -1206,6 +1175,7 @@
             if (audioContext.state === 'suspended') {
                 audioContext.resume();
             }
+            if (playHtmlAudio('fanfare')) return;
             
             // Cheerful ascending fanfare notes (C major arpeggio + octave)
             const notes = [
@@ -1241,6 +1211,7 @@
             if (audioContext.state === 'suspended') {
                 audioContext.resume();
             }
+            if (playHtmlAudio('grow')) return;
             
             try {
                 const oscillator = audioContext.createOscillator();
@@ -1329,6 +1300,8 @@
             osc.stop(audioContext.currentTime + 0.25);
             
             audioUnlocked = true;
+            // Preload HTML audio assets now that user interacted
+            loadAudioElements();
             
             // Hide overlay and play fanfare
             soundOverlay.classList.add('hidden');
