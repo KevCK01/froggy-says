@@ -831,33 +831,39 @@
                 console.error('Setup screen not found!');
             }
 
-            // Add event listeners to round buttons
+            // Add event listeners to round buttons (unlock audio on each click for mobile)
             document.getElementById('btn-4').addEventListener('click', () => {
                 console.log('4 rounds clicked');
+                ensureAudioUnlocked();
                 startGame(4);
             });
             document.getElementById('btn-6').addEventListener('click', () => {
                 console.log('6 rounds clicked');
+                ensureAudioUnlocked();
                 startGame(6);
             });
             document.getElementById('btn-8').addEventListener('click', () => {
                 console.log('8 rounds clicked');
+                ensureAudioUnlocked();
                 startGame(8);
             });
             document.getElementById('btn-10').addEventListener('click', () => {
                 console.log('10 rounds clicked');
+                ensureAudioUnlocked();
                 startGame(10);
             });
 
             // Add event listener for Infinity Mode button
             document.getElementById('btn-infinity').addEventListener('click', () => {
                 console.log('Infinity Mode clicked');
+                ensureAudioUnlocked();
                 startInfinityMode();
             });
 
-            // Add event listener to GO button
+            // Add event listener to GO button (critical - this is where game audio starts)
             document.getElementById('go-button').addEventListener('click', () => {
                 console.log('GO button clicked');
+                ensureAudioUnlocked();
                 handleGoButton();
             });
 
@@ -894,6 +900,7 @@
             document.querySelectorAll('.lily-pad-wrapper').forEach(wrapper => {
                 wrapper.addEventListener('pointerdown', (e) => {
                     e.preventDefault(); // Prevent any default drag behavior
+                    ensureAudioUnlocked(); // Unlock audio on every touch for mobile
                     if (!isPlayerTurn || isPlayingPattern || isPlayingAnimation) return;
                     
                     const padIndex = parseInt(wrapper.dataset.pad);
@@ -917,12 +924,28 @@
         // AUDIO SETUP
         // ============================================
         function initAudio() {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            // CRITICAL for mobile: Resume suspended audio context
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+
+        // Ensure audio is unlocked (call on any user interaction)
+        function ensureAudioUnlocked() {
+            if (!audioContext) {
+                initAudio();
+            } else if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
         }
 
         // Play a musical note for lily pad
         function playNote(frequency, duration = 0.3) {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -951,6 +974,7 @@
         // Play ribbit sound
         function playRibbit() {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -972,6 +996,7 @@
         // Play buzzer sound for wrong answer
         function playBuzzer() {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -992,6 +1017,7 @@
         // Play celebration sound
         function playCelebration() {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             const frequencies = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
             
@@ -1018,6 +1044,7 @@
         // Play ping sound for GO button
         function playPing() {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1038,6 +1065,7 @@
         // Play fanfare for homepage
         function playFanfare() {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             // Cheerful ascending fanfare notes (C major arpeggio + octave)
             const notes = [
@@ -1070,6 +1098,7 @@
         // Play growth sound when frog gets bigger
         function playGrowSound() {
             if (!audioContext) initAudio();
+            ensureAudioUnlocked();
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1129,14 +1158,26 @@
         }
 
         // Initialize audio context on first user interaction and play fanfare
-        document.addEventListener('click', function initOnClick() {
-            if (!audioContext) {
-                initAudio();
-                // Play fanfare on first click (welcome to the game!)
-                setTimeout(() => playFanfare(), 100);
+        // CRITICAL for mobile: Audio must be triggered DIRECTLY from user gesture
+        document.addEventListener('touchstart', unlockAudio, { once: true });
+        document.addEventListener('click', unlockAudio, { once: true });
+        
+        function unlockAudio() {
+            initAudio();
+            // Play a silent buffer to fully unlock audio on iOS
+            if (audioContext) {
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(0);
             }
-            document.removeEventListener('click', initOnClick);
-        }, { once: true });
+            // Play fanfare DIRECTLY (no setTimeout - that breaks mobile!)
+            playFanfare();
+            // Remove the other listener since we only need one
+            document.removeEventListener('touchstart', unlockAudio);
+            document.removeEventListener('click', unlockAudio);
+        }
 
         // Start the game with selected number of rounds
         function startGame(rounds) {
