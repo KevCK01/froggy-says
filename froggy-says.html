@@ -921,9 +921,13 @@
         });
         
         // ============================================
-        // AUDIO SETUP (Mobile-friendly)
+        // AUDIO SETUP (iOS-friendly approach)
         // ============================================
         let audioUnlocked = false;
+        
+        // Create a silent audio element for iOS priming
+        const silentAudio = new Audio("data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAAGn9AAAIAAANIAAAARMQJEMBAMDAoPB4PP/BwfT/Lh4AAAABg8HwfB/5c/KAgGDw+D4P//lwEBgYPB4PB4PwfB//5cAAAAD5d////+XAQCAYPDw+DweBwf///l/8uAgMDA4MHh8Hg//5cPw//8vn////y4efPPPPPPPPPPPPPPPPPPPPPPPPPP/7UMQEgAjMOXf09oAhEgcwPpyQBPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP/7UMQWgAAADSAAAAAAAANIAAAATPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP");
+        silentAudio.volume = 0.01;
         
         function initAudio() {
             if (!audioContext) {
@@ -934,75 +938,84 @@
         }
 
         // CRITICAL: This must be called from a direct user gesture (touch/click)
-        // iOS Safari requires actual audio to play, not just resume()
         function ensureAudioUnlocked() {
-            console.log('ensureAudioUnlocked called, audioUnlocked:', audioUnlocked);
+            console.log('ensureAudioUnlocked called, state:', audioContext?.state, 'unlocked:', audioUnlocked);
             
+            // Step 1: Create context if needed
             if (!audioContext) {
                 initAudio();
             }
             
-            // Always try to resume if suspended
-            if (audioContext.state === 'suspended') {
-                console.log('Resuming suspended AudioContext...');
-                audioContext.resume().then(() => {
-                    console.log('AudioContext resumed, new state:', audioContext.state);
-                });
+            // Step 2: Always try to resume
+            if (audioContext && audioContext.state === 'suspended') {
+                console.log('Resuming AudioContext...');
+                audioContext.resume();
             }
             
-            // iOS Safari trick: Play a tiny sound to fully unlock
-            // This is required even after resume() on some iOS versions
-            if (!audioUnlocked && audioContext) {
-                console.log('Playing unlock sound...');
-                try {
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    // Nearly silent but not zero (zero doesn't unlock on some devices)
-                    gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
-                    
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + 0.1);
-                    
+            // Step 3: iOS trick - play the silent HTML5 audio to "prime" audio
+            if (!audioUnlocked) {
+                console.log('Priming audio with silent mp3...');
+                silentAudio.play().then(() => {
+                    console.log('Silent audio played successfully!');
                     audioUnlocked = true;
-                    console.log('Audio unlock sound played!');
-                } catch (e) {
-                    console.error('Audio unlock failed:', e);
+                }).catch(e => {
+                    console.log('Silent audio blocked (expected on first load):', e.message);
+                });
+                
+                // Also try oscillator approach as backup
+                if (audioContext) {
+                    try {
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+                        gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.05);
+                        console.log('Oscillator unlock attempted');
+                    } catch (e) {
+                        console.log('Oscillator unlock failed:', e);
+                    }
                 }
             }
         }
 
         // Play a musical note for lily pad
         function playNote(frequency, duration = 0.3) {
-            console.log('playNote called, freq:', frequency, 'audioContext:', !!audioContext);
+            console.log('playNote called, freq:', frequency);
             
             if (!audioContext) initAudio();
-            ensureAudioUnlocked();
             
-            console.log('AudioContext state:', audioContext.state);
-            
-            try {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.type = 'triangle'; // Pleasant sound
-                oscillator.frequency.value = frequency;
-                
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + duration);
-                console.log('Note started playing!');
-            } catch (e) {
-                console.error('Error playing note:', e);
+            // Force resume every time on mobile
+            if (audioContext && audioContext.state !== 'running') {
+                console.log('AudioContext not running, attempting resume...');
+                audioContext.resume();
             }
+            
+            console.log('AudioContext state:', audioContext?.state);
+            
+            // Small delay to let resume take effect on iOS
+            setTimeout(() => {
+                try {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'triangle';
+                    oscillator.frequency.value = frequency;
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + duration);
+                    console.log('Note playing! State:', audioContext.state);
+                } catch (e) {
+                    console.error('Error playing note:', e);
+                }
+            }, 10);
         }
 
         // Note frequencies for each lily pad
