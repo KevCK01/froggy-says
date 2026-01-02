@@ -1004,7 +1004,6 @@
         // Play a musical note for lily pad
         function playNote(frequency, duration = 0.3) {
             if (!audioContext) return; // Audio not initialized yet
-            
             if (audioContext.state === 'suspended') {
                 audioContext.resume();
             }
@@ -1036,6 +1035,9 @@
         // Play ribbit sound
         function playRibbit() {
             if (!audioContext) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1057,6 +1059,9 @@
         // Play buzzer sound for wrong answer
         function playBuzzer() {
             if (!audioContext) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1077,6 +1082,9 @@
         // Play celebration sound
         function playCelebration() {
             if (!audioContext) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             const frequencies = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
             
@@ -1103,6 +1111,9 @@
         // Play ping sound for GO button
         function playPing() {
             if (!audioContext) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1123,6 +1134,9 @@
         // Play fanfare for homepage
         function playFanfare() {
             if (!audioContext) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             // Cheerful ascending fanfare notes (C major arpeggio + octave)
             const notes = [
@@ -1155,6 +1169,9 @@
         // Play growth sound when frog gets bigger
         function playGrowSound() {
             if (!audioContext) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
             
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -1213,7 +1230,7 @@
             });
         }
 
-        // Handle the "Enable Sound" button - SIMPLIFIED for iOS
+        // Handle the "Enable Sound" button - keep it simple and reliable for iOS
         const soundOverlay = document.getElementById('sound-overlay');
         const soundButton = soundOverlay.querySelector('.sound-button');
         
@@ -1229,7 +1246,7 @@
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
             // Step 2: Resume it (required for iOS)
-            audioContext.resume();
+            const resumePromise = audioContext.resume();
             
             // Step 3: Play a real sound immediately (this unlocks iOS audio)
             const osc = audioContext.createOscillator();
@@ -1237,22 +1254,25 @@
             osc.connect(gain);
             gain.connect(audioContext.destination);
             osc.frequency.value = 520;
-            gain.gain.value = 0.3;
-            osc.start();
-            osc.stop(audioContext.currentTime + 0.1);
+            gain.gain.value = 0.4;
+            // short but definitely audible blip
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.25);
             
             audioUnlocked = true;
             
             // Hide overlay and play fanfare
             soundOverlay.classList.add('hidden');
-            setTimeout(playFanfare, 150);
+            Promise.resolve(resumePromise).then(() => {
+                setTimeout(playFanfare, 120);
+            });
         }
         
-        // Listen for both touch and click
-        soundButton.addEventListener('touchend', enableSound);
-        soundButton.addEventListener('click', enableSound);
-        soundOverlay.addEventListener('touchend', enableSound);
-        soundOverlay.addEventListener('click', enableSound);
+        // Listen for both touch and click (start and end for iOS quirks)
+        ['touchstart','touchend','click'].forEach(evt => {
+            soundButton.addEventListener(evt, enableSound);
+            soundOverlay.addEventListener(evt, enableSound);
+        });
 
         // Start the game with selected number of rounds
         function startGame(rounds) {
